@@ -887,10 +887,11 @@
       const PW = "Ogilvy"; // case sensitive
 
       // >>>> SET THESE FOR YOUR REPO/WORKER <<<<
-      const DATA_URL =
-        "https://raw.githubusercontent.com/<OWNER>/<REPO>/<BRANCH>/data/awards.json";
-      const WRITER_URL = "https://hogarth-writer.<yourname>.workers.dev";
-      const SYNC_INTERVAL = 10000; // ms
+    // AFTER (real)
+const DATA_URL   = "https://raw.githubusercontent.com/dodisworking/OgilvyXHogarth/main/data/awards.json";
+const WRITER_URL = "https://hogarth-writer.dodisworking.workers.dev";
+const SYNC_INTERVAL = 10000; // ms
+
       const CACHE_KEY = "ogilvy-hogarth-awards-cache-v1";
 
       // === MARK CURSOR LOADER (minimal, robust, used only in Mark Mode) ===
@@ -1075,24 +1076,27 @@
         }
       }
 
-      async function writer(path, payload) {
-        const res = await fetch(WRITER_URL + path, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "X-Tracker-Key": PW, // must match your Worker secret
-          },
-          body: JSON.stringify(payload || {}),
-        });
-        if (!res.ok) throw new Error(await res.text());
-        const doc = await res.json();
-        lastVersion = doc.version || lastVersion + 1;
-        entries = Array.isArray(doc.entries) ? doc.entries : [];
-        localStorage.setItem(CACHE_KEY, JSON.stringify(doc));
-        renderAll();
-        if (location.hash === "#list") renderList();
-        if (location.hash === "#leaders") renderLeaderboards();
-      }
+      async function writerAdd(payload) {
+  // POST to the Worker root with body: { sharedKey, entry }
+  const res = await fetch(WRITER_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ sharedKey: PW, entry: payload })
+  });
+  const out = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(out.error || "Submit failed");
+
+  // Re-fetch the JSON from GitHub so the UI shows the latest
+  const r = await fetch(DATA_URL + "?t=" + Date.now(), { cache: "no-store" });
+  const doc = await r.json();
+  lastVersion = doc.version || 0;
+  entries = Array.isArray(doc.entries) ? doc.entries : [];
+  localStorage.setItem(CACHE_KEY, JSON.stringify(doc));
+  renderAll();
+  if (location.hash === "#list") renderList();
+  if (location.hash === "#leaders") renderLeaderboards();
+}
+
 
       // =================== COUNTDOWN ===================
       function tickCountdown() {
@@ -1528,7 +1532,8 @@
         };
 
         try {
-          await writer("/add-entry", payload);
+         await writerAdd(payload);
+
           pourAndCelebrate();
           elForm.reset();
           fProject.focus();
