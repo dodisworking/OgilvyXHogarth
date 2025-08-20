@@ -770,24 +770,7 @@
                     ></div>
                   </div>
                 </div>
-
-                <div class="row" style="gap: 8px; flex-wrap: wrap">
-                  <button id="changeImgsBtn" type="button" class="btn small">
-                    Change Shoe Images
-                  </button>
-                </div>
-                <input
-                  id="shoeSilInput"
-                  type="file"
-                  accept="image/*"
-                  style="display: none"
-                />
-                <input
-                  id="shoeOutlineInput"
-                  type="file"
-                  accept="image/*"
-                  style="display: none"
-                />
+                <!-- Image change UI removed -->
               </div>
             </div>
           </section>
@@ -898,9 +881,17 @@
       // =================== CONFIG ===================
       const GOAL = 4_000_000;
       const BASELINE = 0;
-      const STORAGE_KEY = "ogilvy-hogarth-jar-v1";
       const TARGET = new Date("2025-12-31T23:59:59");
+
+      // Password for UI gate AND request auth header (match your Worker secret)
       const PW = "Ogilvy"; // case sensitive
+
+      // >>>> SET THESE FOR YOUR REPO/WORKER <<<<
+      const DATA_URL =
+        "https://raw.githubusercontent.com/<OWNER>/<REPO>/<BRANCH>/data/awards.json";
+      const WRITER_URL = "https://hogarth-writer.<yourname>.workers.dev";
+      const SYNC_INTERVAL = 10000; // ms
+      const CACHE_KEY = "ogilvy-hogarth-awards-cache-v1";
 
       // === MARK CURSOR LOADER (minimal, robust, used only in Mark Mode) ===
       const MarkCursor = (() => {
@@ -930,7 +921,6 @@
             '"), auto !important' +
             "}";
           document.head.appendChild(styleEl);
-          // backup inline in case something wins specificity
           document.documentElement.style.cursor =
             'url("./' +
             IMG +
@@ -965,7 +955,6 @@
             injected = true;
             cb && cb();
           };
-          // if it fails, we just keep default cursor
           img.src = "./" + IMG + "?v=" + bust;
         }
 
@@ -1049,78 +1038,60 @@
       const confettiCanvas = document.getElementById("confettiCanvas");
       const ctx = confettiCanvas.getContext("2d");
 
-      const changeImgsBtn = document.getElementById("changeImgsBtn");
-      const shoeSilInput = document.getElementById("shoeSilInput");
-      const shoeOutlineInput = document.getElementById("shoeOutlineInput");
-
       const fmt = new Intl.NumberFormat("en-US", {
         style: "currency",
         currency: "USD",
         maximumFractionDigits: 0,
       });
 
-      // =================== STATE ===================
+      // =================== SHARED STATE (from repo JSON) ===================
       let entries = [];
-      try {
-        const raw = localStorage.getItem(STORAGE_KEY);
-        if (raw) entries = JSON.parse(raw);
-      } catch {}
+      let lastVersion = 0;
 
-      if (!entries || entries.length === 0) {
-        const seed = [
-          [
-            "Faces of Frontline Social",
-            "Verizon",
-            "Eduardo Dañino",
-            "VZW.VZWVBG.25161.Q.011",
-            "2025-07-15",
-            148420,
-          ],
-          [
-            "Disaster Tampa",
-            "Verizon",
-            "Eduardo Dañino",
-            "VZW.VZWCSR.25044.Q.011",
-            "2025-05-29",
-            127256.6,
-          ],
-          [
-            "Verizon VHI Mid-winter - Router Shoot",
-            "Verizon",
-            "Eduardo Dañino",
-            "VZW.VZWVCG.25029.F.011",
-            "2025-02-21",
-            48744.6,
-          ],
-          [
-            "FWA I heart radio",
-            "Verizon",
-            "Isaac Boruchowicz",
-            "VZW.VZWVCG.25208.S.011",
-            "2025-05-30",
-            2700,
-          ],
-          [
-            "Q3 LGPO radio",
-            "Verizon",
-            "Isaac Boruchowicz",
-            "VZW.VZWVCG.25265.S.011",
-            "2025-06-18",
-            13550,
-          ],
-        ];
-        entries = seed.map((s) => ({
-          id: crypto.randomUUID(),
-          project: s[0],
-          client: s[1],
-          producer: s[2],
-          job: s[3],
-          date: s[4],
-          amount: s[5],
-        }));
+      async function fetchAwards() {
         try {
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(entries));
-        } catch {}
+          const res = await fetch(DATA_URL + "?ts=" + Date.now(), {
+            cache: "no-store",
+          });
+          if (!res.ok) throw new Error("Fetch " + res.status);
+          const doc = await res.json();
+          if (doc?.version !== lastVersion) {
+            lastVersion = doc.version || 0;
+            entries = Array.isArray(doc.entries) ? doc.entries : [];
+            localStorage.setItem(CACHE_KEY, JSON.stringify(doc));
+            renderAll();
+            if (location.hash === "#list") renderList();
+            if (location.hash === "#leaders") renderLeaderboards();
+          }
+        } catch (e) {
+          // fallback to cache if offline
+          const raw = localStorage.getItem(CACHE_KEY);
+          if (raw) {
+            const doc = JSON.parse(raw);
+            lastVersion = doc.version || 0;
+            entries = Array.isArray(doc.entries) ? doc.entries : [];
+            renderAll();
+          }
+        }
+      }
+
+      async function writer(path, payload) {
+        const res = await fetch(WRITER_URL + path, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Tracker-Key": PW, // must match your Worker secret
+          },
+          body: JSON.stringify(payload || {}),
+        });
+        if (!res.ok) throw new Error(await res.text());
+        const doc = await res.json();
+        lastVersion = doc.version || lastVersion + 1;
+        entries = Array.isArray(doc.entries) ? doc.entries : [];
+        localStorage.setItem(CACHE_KEY, JSON.stringify(doc));
+        renderAll();
+        if (location.hash === "#list") renderList();
+        if (location.hash === "#leaders") renderLeaderboards();
       }
 
       // =================== COUNTDOWN ===================
@@ -1133,15 +1104,9 @@
         const days = Math.floor(diff / (1000 * 60 * 60 * 24));
         elCountdown.textContent = `${days}d ${hr}h ${min}m ${sec}s`;
       }
-      tickCountdown();
       setInterval(tickCountdown, 1000);
 
-      // =================== SAVE/UTILS ===================
-      function save() {
-        try {
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(entries));
-        } catch {}
-      }
+      // =================== UTILS ===================
       function parseAmountInput(v) {
         const n = Number(String(v).replace(/[^0-9.-]/g, ""));
         return isFinite(n) ? n : 0;
@@ -1282,12 +1247,15 @@
         tdAct.appendChild(btnDel);
         tr.appendChild(tdAct);
 
-        btnDel.addEventListener("click", () => {
-          entries = entries.filter((x) => x.id !== e.id);
-          save();
-          renderList();
-          renderStats();
+        btnDel.addEventListener("click", async () => {
+          if (!confirm("Delete this submission?")) return;
+          try {
+            await writer("/delete-entry", { id: e.id });
+          } catch (err) {
+            alert("Delete failed: " + (err.message || err));
+          }
         });
+
         btnEdit.addEventListener("click", () => startEdit(tr, e));
         subsBody.appendChild(tr);
       }
@@ -1327,11 +1295,12 @@
         tdAct.appendChild(btnSave);
         tdAct.appendChild(btnCancel);
         tr.appendChild(tdAct);
+
         btnCancel.addEventListener("click", renderList);
-        btnSave.addEventListener("click", () => {
+        btnSave.addEventListener("click", async () => {
           const newAmt = parseAmountInput(iAmt.value);
           const updated = {
-            ...e,
+            id: e.id,
             project: iProj.value.trim(),
             client: iClient.value.trim(),
             producer: iProd.value.trim(),
@@ -1339,17 +1308,17 @@
             date: iDate.value,
             amount: newAmt,
           };
-          const idx = entries.findIndex((x) => x.id === e.id);
-          if (idx !== -1) entries[idx] = updated;
-          save();
-          renderList();
-          renderStats();
+          try {
+            await writer("/update-entry", updated);
+          } catch (err) {
+            alert("Update failed: " + (err.message || err));
+          }
         });
       }
 
       function renderList() {
         subsBody.innerHTML = "";
-        if (entries.length === 0) {
+        if (!entries || entries.length === 0) {
           emptyState.style.display = "block";
           return;
         }
@@ -1395,11 +1364,12 @@
                 ? `${fmt.format(behind)} behind`
                 : `${behind} behind`;
             const h = barHeight(val);
-            return `<div class="place" style="height:${h}px"><div class="medal">${
-              medals[idx]
-            }</div><div class="name">${
-              it.producer || "Unknown"
-            }</div><div class="metric">${metricText}</div><div class="metric" style="font-size:11px">${behindText}</div></div>`;
+            return `<div class="place" style="height:${h}px">
+                    <div class="medal">${medals[idx]}</div>
+                    <div class="name">${it.producer || "Unknown"}</div>
+                    <div class="metric">${metricText}</div>
+                    <div class="metric" style="font-size:11px">${behindText}</div>
+                  </div>`;
           })
           .join("");
         return boxes || `<div class="muted">No data yet</div>`;
@@ -1534,8 +1504,8 @@
       dlXLSX?.addEventListener("click", exportToExcel);
       dlXLSXHeader?.addEventListener("click", exportToExcel);
 
-      // =================== FORM SUBMIT ===================
-      elForm.addEventListener("submit", function (ev) {
+      // =================== FORM SUBMIT (writes via Worker) ===================
+      elForm.addEventListener("submit", async function (ev) {
         ev.preventDefault();
         const amount = parseAmountInput(fAmount.value);
         if (
@@ -1543,34 +1513,38 @@
           !fClient.value.trim() ||
           !fProducer.value.trim() ||
           !fJob.value.trim() ||
-          !fDate.value
+          !fDate.value ||
+          !(amount > 0)
         )
           return;
-        if (!(amount > 0)) return;
-        entries.unshift({
-          id: crypto.randomUUID(),
+
+        const payload = {
           project: fProject.value.trim(),
           client: fClient.value.trim(),
           producer: fProducer.value.trim(),
           job: fJob.value.trim(),
-          date: fDate.value,
-          amount,
-        });
-        save();
-        renderAll();
-        pourAndCelebrate();
-        elForm.reset();
-        fProject.focus();
+          date: fDate.value, // yyyy-mm-dd
+          amount: amount,
+        };
+
+        try {
+          await writer("/add-entry", payload);
+          pourAndCelebrate();
+          elForm.reset();
+          fProject.focus();
+        } catch (err) {
+          alert("Save failed: " + (err.message || err));
+        }
       });
 
       // =================== CLEAR ALL ===================
-      clearBtn?.addEventListener("click", function () {
-        if (!confirm("Clear all submissions?")) return;
-        entries = [];
-        save();
-        renderList();
-        renderStats();
-        if (location.hash === "#leaders") renderLeaderboards();
+      clearBtn?.addEventListener("click", async function () {
+        if (!confirm("Clear ALL submissions? This cannot be undone.")) return;
+        try {
+          await writer("/clear-all", {}); // implement this route in your Worker
+        } catch (err) {
+          alert("Clear failed: " + (err.message || err));
+        }
       });
 
       // =================== PASSWORD GATE ===================
@@ -1629,32 +1603,17 @@
         confettiBurstAt(e.clientX, e.clientY, 200);
       });
 
-      // =================== IMAGE UPLOAD PROCESS ===================
-      changeImgsBtn?.addEventListener("click", () => {
-        shoeSilInput.click();
-      });
-      shoeSilInput?.addEventListener("change", () => {
-        const f = shoeSilInput.files?.[0];
-        if (f) {
-          const url = URL.createObjectURL(f);
-          if (stilettoShoe) stilettoShoe.src = url;
-        }
-        shoeOutlineInput.click();
-      });
-      shoeOutlineInput?.addEventListener("change", () => {
-        const f = shoeOutlineInput.files?.[0];
-        if (f) {
-          const url = URL.createObjectURL(f);
-          if (stilettoOutline) stilettoOutline.src = url;
-        }
-      });
-
-      // =================== FIRST PAINT ===================
-      if (sessionStorage.getItem("fj_unlocked") !== "1") showGate();
-      else hideGate();
-      tickCountdown();
-      updateRoute();
-      renderAll();
+      // =================== INIT ===================
+      async function init() {
+        tickCountdown();
+        updateRoute();
+        if (sessionStorage.getItem("fj_unlocked") !== "1") showGate();
+        else hideGate();
+        await fetchAwards(); // load shared data
+        renderAll();
+        setInterval(fetchAwards, SYNC_INTERVAL); // live-ish sync
+      }
+      init();
     </script>
   </body>
 </html>
