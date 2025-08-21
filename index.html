@@ -546,12 +546,81 @@
         pointer-events: none;
         z-index: 2;
       }
+
+      /* =============== MARK LOADER OVERLAY =============== */
+      #markLoader {
+        position: fixed;
+        inset: 0;
+        z-index: 20000;
+        background: rgba(15, 23, 42, 0.82);
+        backdrop-filter: blur(2px);
+        display: none;
+        place-items: center;
+      }
+      #markLoader.show {
+        display: grid;
+      }
+      .mark-card {
+        background: #fff;
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        padding: 18px 22px;
+        box-shadow: 0 10px 28px rgba(0, 0, 0, 0.18);
+        display: grid;
+        justify-items: center;
+        gap: 10px;
+        text-align: center;
+      }
+      .mark-rotor {
+        width: 260px;
+        height: 260px;
+        display: grid;
+        place-items: center;
+      }
+      .mark-rotor img {
+        width: 240px;
+        height: 240px;
+        object-fit: contain;
+        animation: spin3 3s linear infinite;
+        transform-origin: center center;
+      }
+      @keyframes spin3 {
+        from {
+          transform: rotate(0deg);
+        }
+        to {
+          transform: rotate(360deg);
+        }
+      }
+      .mark-text {
+        font-weight: 700;
+      }
+      @media (max-width: 480px) {
+        .mark-rotor {
+          width: 200px;
+          height: 200px;
+        }
+        .mark-rotor img {
+          width: 180px;
+          height: 180px;
+        }
+      }
     </style>
 
     <!-- SheetJS for Excel export -->
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   </head>
   <body>
+    <!-- Mark Loader -->
+    <div id="markLoader" aria-live="polite" role="status">
+      <div class="mark-card">
+        <div class="mark-rotor">
+          <img src="mark5.png" alt="Mark loading" />
+        </div>
+        <div class="mark-text" id="markLoaderText">Data updating...</div>
+      </div>
+    </div>
+
     <header>
       <div class="wrap row">
         <div class="title">Ogilvy X Hogarth Tracker</div>
@@ -883,7 +952,7 @@
 
       const CACHE_KEY = "ogilvy-hogarth-awards-cache-v1";
 
-      // === MARK CURSOR LOADER (optional assets) ===
+      // === MARK CURSOR (Mark Mode) ===
       const MarkCursor = (() => {
         const IMG = "mark5.png";
         let injected = false,
@@ -966,7 +1035,6 @@
       // =================== DOM HOOKS ===================
       const elCountdown = document.getElementById("countdown");
       const elForm = document.getElementById("awardForm");
-
       const elWater = document.getElementById("water");
       const elWave = document.getElementById("wave");
       const elTotal = document.getElementById("totalOut");
@@ -980,7 +1048,6 @@
       const elFillM = document.getElementById("pfillM");
 
       const stilettoShoe = document.getElementById("stilettoShoe");
-      const stilettoOutline = document.getElementById("stilettoOutline");
 
       const visualTitle = document.getElementById("visualTitle");
       const jarBlock = document.getElementById("jarBlock");
@@ -1022,6 +1089,9 @@
       const confettiCanvas = document.getElementById("confettiCanvas");
       const ctx = confettiCanvas.getContext("2d");
 
+      const elLoader = document.getElementById("markLoader");
+      const elLoaderText = document.getElementById("markLoaderText");
+
       const fmt = new Intl.NumberFormat("en-US", {
         style: "currency",
         currency: "USD",
@@ -1035,14 +1105,31 @@
       function tickCountdown() {
         const now = new Date();
         const diff = Math.max(0, TARGET.getTime() - now.getTime());
-        const sec = Math.floor(diff / 1000) % 60,
-          min = Math.floor(diff / (1000 * 60)) % 60,
-          hr = Math.floor(diff / (1000 * 60 * 60)) % 24,
-          days = Math.floor(diff / (1000 * 60 * 60 * 24));
+        const sec = Math.floor(diff / 1000) % 60;
+        const min = Math.floor(diff / (1000 * 60)) % 60;
+        const hr = Math.floor(diff / (1000 * 60 * 60)) % 24;
+        const days = Math.floor(diff / (1000 * 60 * 60 * 24));
         elCountdown.textContent = `${days}d ${hr}h ${min}m ${sec}s`;
       }
       setInterval(tickCountdown, 1000);
       tickCountdown();
+
+      // =================== LOADER HELPERS ===================
+      function showLoader(msg = "Data updating...") {
+        if (elLoaderText) elLoaderText.textContent = msg;
+        elLoader.classList.add("show");
+      }
+      function hideLoader() {
+        elLoader.classList.remove("show");
+      }
+      async function withLoader(fn, msg = "Data updating...") {
+        showLoader(msg);
+        try {
+          return await fn();
+        } finally {
+          hideLoader();
+        }
+      }
 
       // =================== UTILS ===================
       function parseAmountInput(v) {
@@ -1050,7 +1137,7 @@
         return isFinite(n) ? n : 0;
       }
 
-      // =================== GAS HELPERS (no custom headers) ===================
+      // =================== GAS HELPERS ===================
       async function loadEntriesRemote() {
         const url = API_TOKEN
           ? `${API_URL}?token=${encodeURIComponent(API_TOKEN)}`
@@ -1093,8 +1180,7 @@
         renderAll();
       }
       async function addEntry(entry) {
-        const res = await api("add", entry);
-        if (res.entry) entries.unshift(res.entry);
+        await api("add", entry);
         await fetchAwards();
       }
       async function updateEntry(entry) {
@@ -1128,11 +1214,6 @@
         elWater.style.height = pct100 + "%";
         elWave.style.setProperty("--h", pct100 + "%");
 
-        // Mark Mode mirrors stats
-        const elTotalM = document.getElementById("totalOutM");
-        const elRemainM = document.getElementById("remainingOutM");
-        const elPctM = document.getElementById("pctOutM");
-        const elFillM = document.getElementById("pfillM");
         if (elTotalM && elRemainM && elPctM && elFillM) {
           elTotalM.textContent = fmt.format(currentTotal);
           elRemainM.textContent = fmt.format(remaining);
@@ -1244,7 +1325,7 @@
         btnDel.addEventListener("click", async () => {
           if (!confirm("Delete this submission?")) return;
           try {
-            await deleteEntry(e.id);
+            await withLoader(() => deleteEntry(e.id), "Removing...");
           } catch (err) {
             alert("Delete failed: " + (err.message || err));
           }
@@ -1298,7 +1379,7 @@
             amount: parseAmountInput(iAmt.value),
           };
           try {
-            await updateEntry(updated);
+            await withLoader(() => updateEntry(updated), "Updating...");
           } catch (err) {
             alert("Update failed: " + (err.message || err));
           }
@@ -1476,8 +1557,12 @@
           .slice(0, 10)}.xlsx`;
         XLSX.writeFile(wb, fn);
       }
-      dlXLSX?.addEventListener("click", exportToExcel);
-      dlXLSXHeader?.addEventListener("click", exportToExcel);
+      dlXLSX?.addEventListener("click", () =>
+        withLoader(() => exportToExcel(), "Preparing file...")
+      );
+      dlXLSXHeader?.addEventListener("click", () =>
+        withLoader(() => exportToExcel(), "Preparing file...")
+      );
 
       // =================== FORM SUBMIT ===================
       elForm.addEventListener("submit", async (ev) => {
@@ -1498,10 +1583,10 @@
           producer: fProducer.value.trim(),
           job: fJob.value.trim(),
           date: fDate.value,
-          amount: amount,
+          amount,
         };
         try {
-          await addEntry(payload);
+          await withLoader(() => addEntry(payload), "Saving...");
           pourAndCelebrate();
           elForm.reset();
           fProject.focus();
@@ -1514,7 +1599,7 @@
       clearBtn?.addEventListener("click", async () => {
         if (!confirm("Clear ALL submissions? This cannot be undone.")) return;
         try {
-          await clearAll();
+          await withLoader(() => clearAll(), "Clearing...");
         } catch (err) {
           alert("Clear failed: " + (err.message || err));
         }
@@ -1534,6 +1619,15 @@
           sessionStorage.setItem("fj_unlocked", "1");
           gateError.style.display = "none";
           hideGate();
+
+          // Show loader for at least 3s on unlock
+          const started = Date.now();
+          showLoader("Data updating...");
+          fetchAwards().finally(() => {
+            const elapsed = Date.now() - started;
+            const remain = Math.max(0, 3000 - elapsed);
+            setTimeout(hideLoader, remain);
+          });
           return true;
         }
         gateError.style.display = "block";
@@ -1559,9 +1653,9 @@
         if (isMark) MarkCursor.enable();
         else MarkCursor.disable();
       }
-      modeToggle.addEventListener("click", () => {
-        setMode(!document.body.classList.contains("mode-mark"));
-      });
+      modeToggle.addEventListener("click", () =>
+        setMode(!document.body.classList.contains("mode-mark"))
+      );
       document.addEventListener("click", (e) => {
         if (!document.body.classList.contains("mode-mark")) return;
         if (e.button !== 0) return;
@@ -1591,10 +1685,25 @@
       async function init() {
         tickCountdown();
         updateRoute();
-        if (sessionStorage.getItem("fj_unlocked") !== "1") showGate();
-        else hideGate();
-        await fetchAwards();
-        renderAll();
+
+        // Preload mark image to avoid first-frame flicker
+        const preload = new Image();
+        preload.src = "mark5.png";
+
+        const unlocked = sessionStorage.getItem("fj_unlocked") === "1";
+        if (!unlocked) {
+          showGate();
+        } else {
+          hideGate();
+          const started = Date.now();
+          showLoader("Data updating...");
+          await fetchAwards();
+          const elapsed = Date.now() - started;
+          const remain = Math.max(0, 3000 - elapsed);
+          setTimeout(hideLoader, remain);
+        }
+
+        // Keep syncing silently
         setInterval(fetchAwards, SYNC_INTERVAL);
       }
       init();
