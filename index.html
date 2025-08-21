@@ -34,11 +34,10 @@
       body {
         margin: 0;
         font-family: ui-sans-serif, system-ui, Arial;
-        background: #f8fafc;
-        color: #0f172a;
-        cursor: auto; /* base cursor */
+        background: var(--bg);
+        color: var(--ink);
+        cursor: auto;
       }
-      /* Make interactives inherit so the global cursor wins */
       button,
       a,
       input,
@@ -145,8 +144,7 @@
         display: inline-flex;
         align-items: center;
         gap: 6px;
-        transition: background 0.2s ease, color 0.2s ease,
-          border-color 0.2s ease;
+        transition: background 0.2s, color 0.2s, border-color 0.2s;
       }
       .btn.primary {
         background: var(--accent);
@@ -316,7 +314,7 @@
 
       html.mark header,
       html.mark header * {
-        cursor: auto !important; /* default cursor just in the header strip */
+        cursor: auto !important;
       }
 
       /* Confetti canvas */
@@ -502,30 +500,31 @@
         color: var(--mark-accent);
       }
 
-      /* Stiletto only visible in Mark Mode */
       .stiletto-wrap {
         display: none;
       }
       body.mode-mark .stiletto-wrap {
         display: grid;
       }
-
       .stiletto-stage {
         position: relative;
         width: min(320px, 70vw);
-        aspect-ratio: 2 / 3;
+        aspect-ratio: 2/3;
         margin: 0 auto;
         background: #fff;
         border-radius: 12px;
         overflow: hidden;
       }
-      .stiletto-shoe {
+      .stiletto-shoe,
+      .stiletto-outline-fixed {
         position: absolute;
         inset: 0;
         width: 100%;
         height: 100%;
         object-fit: contain;
         object-position: center bottom;
+      }
+      .stiletto-shoe {
         --reveal: 0%;
         mask-image: linear-gradient(
           to top,
@@ -544,12 +543,6 @@
         z-index: 1;
       }
       .stiletto-outline-fixed {
-        position: absolute;
-        inset: 0;
-        width: 100%;
-        height: 100%;
-        object-fit: contain;
-        object-position: center bottom;
         pointer-events: none;
         z-index: 2;
       }
@@ -737,7 +730,6 @@
                   alt="Shoe Outline"
                 />
               </div>
-
               <div class="stack">
                 <div class="stats">
                   <div class="stat">
@@ -770,7 +762,6 @@
                     ></div>
                   </div>
                 </div>
-                <!-- Image change UI removed -->
               </div>
             </div>
           </section>
@@ -882,69 +873,62 @@
       const GOAL = 4_000_000;
       const BASELINE = 0;
       const TARGET = new Date("2025-12-31T23:59:59");
+      const PW = "Ogilvy"; // UI gate
 
-      // Password for UI gate AND request auth header (match your Worker secret)
-      const PW = "Ogilvy"; // case sensitive
-
-      // >>>> SET THESE FOR YOUR REPO/WORKER <<<<
-    // AFTER (real)
-const DATA_URL = "https://hogarth-writer.dodisworking.workers.dev";
-
-const WRITER_URL = "https://hogarth-writer.dodisworking.workers.dev";
-const SYNC_INTERVAL = 10000; // ms
+      // === GOOGLE APPS SCRIPT BACKEND (your working /exec URL) ===
+      const API_URL =
+        "https://script.google.com/macros/s/AKfycbybLomMyntVk7MYFbj9Jsoni-ia-MTrecXePX3bST_cibfoEsn4KaXZx2lBiYI37LDp/exec";
+      const API_TOKEN = ""; // leave "" unless you added token checking in Apps Script
+      const SYNC_INTERVAL = 10000; // ms
 
       const CACHE_KEY = "ogilvy-hogarth-awards-cache-v1";
 
-      // === MARK CURSOR LOADER (minimal, robust, used only in Mark Mode) ===
+      // === MARK CURSOR LOADER (optional assets) ===
       const MarkCursor = (() => {
-        const IMG = "mark5.png"; // your cursor image
-        let injected = false;
-        let bust = 0;
-        let styleEl = null;
-
+        const IMG = "mark5.png";
+        let injected = false,
+          bust = 0,
+          styleEl = null;
         function injectRule(w, h) {
-          const hotX = Math.floor((w || 64) / 2);
-          const hotY = Math.floor((h || 64) / 2);
+          const hotX = Math.floor((w || 64) / 2),
+            hotY = Math.floor((h || 64) / 2);
           styleEl = document.createElement("style");
           styleEl.textContent =
-            "html.mark, html.mark body, html.mark *{" +
-            'cursor:url("./' +
+            "html.mark, html.mark body, html.mark *{cursor:url('./" +
             IMG +
             "?v=" +
             bust +
-            '") ' +
+            "') " +
             hotX +
             " " +
             hotY +
-            ', url("./' +
+            ", url('./" +
             IMG +
             "?v=" +
             bust +
-            '"), auto !important' +
-            "}";
+            "'), auto !important}";
           document.head.appendChild(styleEl);
           document.documentElement.style.cursor =
-            'url("./' +
+            "url('./" +
             IMG +
             "?v=" +
             bust +
-            '") ' +
+            "') " +
             hotX +
             " " +
             hotY +
             ", auto";
           document.body.style.cursor =
-            'url("./' +
+            "url('./" +
             IMG +
             "?v=" +
             bust +
-            '") ' +
+            "') " +
             hotX +
             " " +
             hotY +
             ", auto";
         }
-
         function loadOnce(cb) {
           if (injected) {
             cb && cb();
@@ -959,25 +943,23 @@ const SYNC_INTERVAL = 10000; // ms
           };
           img.src = "./" + IMG + "?v=" + bust;
         }
-
-        function enable() {
-          loadOnce(() => {
-            document.documentElement.classList.add("mark");
-          });
-        }
-        function disable() {
-          document.documentElement.classList.remove("mark");
-          document.documentElement.style.cursor = "";
-          document.body.style.cursor = "";
-        }
-        return { enable, disable };
+        return {
+          enable() {
+            loadOnce(() => document.documentElement.classList.add("mark"));
+          },
+          disable() {
+            document.documentElement.classList.remove("mark");
+            document.documentElement.style.cursor = "";
+            document.body.style.cursor = "";
+          },
+        };
       })();
 
       // === MARK MODE CALIBRATION ===
-      const CALIB_LOW = 11; // %
-      const CALIB_HIGH = 57; // %
-      function progressToRevealPct(progress01) {
-        const p = Math.max(0, Math.min(1, progress01));
+      const CALIB_LOW = 11,
+        CALIB_HIGH = 57;
+      function progressToRevealPct(p01) {
+        const p = Math.max(0, Math.min(1, p01));
         return CALIB_LOW + p * (CALIB_HIGH - CALIB_LOW);
       }
 
@@ -1046,70 +1028,21 @@ const SYNC_INTERVAL = 10000; // ms
         maximumFractionDigits: 0,
       });
 
-      // =================== SHARED STATE (from repo JSON) ===================
+      // =================== STATE ===================
       let entries = [];
-      let lastVersion = 0;
-
-      async function fetchAwards() {
-        try {
-          const res = await fetch(DATA_URL + "?ts=" + Date.now(), {
-            cache: "no-store",
-          });
-          if (!res.ok) throw new Error("Fetch " + res.status);
-          const doc = await res.json();
-          if (doc?.version !== lastVersion) {
-            lastVersion = doc.version || 0;
-            entries = Array.isArray(doc.entries) ? doc.entries : [];
-            localStorage.setItem(CACHE_KEY, JSON.stringify(doc));
-            renderAll();
-            if (location.hash === "#list") renderList();
-            if (location.hash === "#leaders") renderLeaderboards();
-          }
-        } catch (e) {
-          // fallback to cache if offline
-          const raw = localStorage.getItem(CACHE_KEY);
-          if (raw) {
-            const doc = JSON.parse(raw);
-            lastVersion = doc.version || 0;
-            entries = Array.isArray(doc.entries) ? doc.entries : [];
-            renderAll();
-          }
-        }
-      }
-
-      async function writerAdd(payload) {
-  // POST to the Worker root with body: { sharedKey, entry }
-  const res = await fetch(WRITER_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ sharedKey: PW, entry: payload })
-  });
-  const out = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(out.error || "Submit failed");
-
-  // Re-fetch the JSON from GitHub so the UI shows the latest
-  const r = await fetch(DATA_URL + "?t=" + Date.now(), { cache: "no-store" });
-  const doc = await r.json();
-  lastVersion = doc.version || 0;
-  entries = Array.isArray(doc.entries) ? doc.entries : [];
-  localStorage.setItem(CACHE_KEY, JSON.stringify(doc));
-  renderAll();
-  if (location.hash === "#list") renderList();
-  if (location.hash === "#leaders") renderLeaderboards();
-}
-
 
       // =================== COUNTDOWN ===================
       function tickCountdown() {
         const now = new Date();
         const diff = Math.max(0, TARGET.getTime() - now.getTime());
-        const sec = Math.floor(diff / 1000) % 60;
-        const min = Math.floor(diff / (1000 * 60)) % 60;
-        const hr = Math.floor(diff / (1000 * 60 * 60)) % 24;
-        const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+        const sec = Math.floor(diff / 1000) % 60,
+          min = Math.floor(diff / (1000 * 60)) % 60,
+          hr = Math.floor(diff / (1000 * 60 * 60)) % 24,
+          days = Math.floor(diff / (1000 * 60 * 60 * 24));
         elCountdown.textContent = `${days}d ${hr}h ${min}m ${sec}s`;
       }
       setInterval(tickCountdown, 1000);
+      tickCountdown();
 
       // =================== UTILS ===================
       function parseAmountInput(v) {
@@ -1117,7 +1050,67 @@ const SYNC_INTERVAL = 10000; // ms
         return isFinite(n) ? n : 0;
       }
 
-      // =================== RENDER STATS ===================
+      // =================== GAS HELPERS (no custom headers) ===================
+      async function loadEntriesRemote() {
+        const url = API_TOKEN
+          ? `${API_URL}?token=${encodeURIComponent(API_TOKEN)}`
+          : API_URL;
+        const res = await fetch(url, { cache: "no-store" });
+        if (!res.ok) throw new Error("Failed to load entries");
+        const data = await res.json();
+        return Array.isArray(data.entries) ? data.entries : [];
+      }
+      async function api(action, payload) {
+        const body = API_TOKEN
+          ? { action, payload, token: API_TOKEN }
+          : { action, payload };
+        const res = await fetch(API_URL, {
+          method: "POST",
+          body: JSON.stringify(body),
+        });
+        if (!res.ok) throw new Error(await res.text());
+        return res.json();
+      }
+      async function fetchAwards() {
+        try {
+          entries = (await loadEntriesRemote()).map((r) => ({
+            ...r,
+            amount: Number(r.amount) || 0,
+          }));
+          localStorage.setItem(
+            CACHE_KEY,
+            JSON.stringify({ entries, version: Date.now() })
+          );
+        } catch (err) {
+          console.warn("Remote load failed; trying cache:", err);
+          try {
+            const cached = JSON.parse(localStorage.getItem(CACHE_KEY) || "{}");
+            entries = cached.entries || [];
+          } catch {}
+        }
+        if (location.hash === "#list") renderList();
+        if (location.hash === "#leaders") renderLeaderboards();
+        renderAll();
+      }
+      async function addEntry(entry) {
+        const res = await api("add", entry);
+        if (res.entry) entries.unshift(res.entry);
+        await fetchAwards();
+      }
+      async function updateEntry(entry) {
+        await api("update", entry);
+        await fetchAwards();
+      }
+      async function deleteEntry(id) {
+        await api("delete", { id });
+        await fetchAwards();
+      }
+      async function clearAll() {
+        await api("clear", {});
+        await fetchAwards();
+      }
+
+      // =================== RENDER ===================
       function renderStats() {
         const totalFromEntries = entries.reduce(
           (s, e) => s + (Number(e.amount) || 0),
@@ -1128,44 +1121,41 @@ const SYNC_INTERVAL = 10000; // ms
         const pct = Math.max(0, Math.min(1, currentTotal / GOAL));
         const pct100 = Math.round(pct * 100);
 
-        // Jar Mode
         elTotal.textContent = fmt.format(currentTotal);
         elRemain.textContent = fmt.format(remaining);
         elPct.textContent = pct100 + "%";
         elFill.style.width = pct100 + "%";
-        const h = pct100;
-        elWater.style.height = h + "%";
-        elWave.style.setProperty("--h", h + "%");
+        elWater.style.height = pct100 + "%";
+        elWave.style.setProperty("--h", pct100 + "%");
 
         // Mark Mode mirrors stats
-        elTotalM.textContent = fmt.format(currentTotal);
-        elRemainM.textContent = fmt.format(remaining);
-        elPctM.textContent = pct100 + "%";
-        elFillM.style.width = pct100 + "%";
-
-        // Mark Mode shoe reveal
+        const elTotalM = document.getElementById("totalOutM");
+        const elRemainM = document.getElementById("remainingOutM");
+        const elPctM = document.getElementById("pctOutM");
+        const elFillM = document.getElementById("pfillM");
+        if (elTotalM && elRemainM && elPctM && elFillM) {
+          elTotalM.textContent = fmt.format(currentTotal);
+          elRemainM.textContent = fmt.format(remaining);
+          elPctM.textContent = pct100 + "%";
+          elFillM.style.width = pct100 + "%";
+        }
         const revealPct = progressToRevealPct(pct);
         stilettoShoe?.style.setProperty("--reveal", revealPct + "%");
       }
-
       function renderGoalLine() {
-        if (BASELINE > 0) {
-          goalLine.textContent = `Baseline ${fmt.format(
-            BASELINE
-          )} toward ${fmt.format(GOAL)} goal`;
-        } else {
-          goalLine.textContent = `Goal ${fmt.format(GOAL)}`;
-        }
+        goalLine.textContent =
+          BASELINE > 0
+            ? `Baseline ${fmt.format(BASELINE)} toward ${fmt.format(GOAL)} goal`
+            : `Goal ${fmt.format(GOAL)}`;
       }
 
-      // =================== CONFETTI ===================
+      // Confetti
       function resizeCanvas() {
         confettiCanvas.width = window.innerWidth;
         confettiCanvas.height = window.innerHeight;
       }
       window.addEventListener("resize", resizeCanvas);
       resizeCanvas();
-
       function confettiBurstAt(x, y, count = 200) {
         const rect = confettiCanvas.getBoundingClientRect();
         const cx = (x - rect.left) * (confettiCanvas.width / rect.width);
@@ -1197,7 +1187,7 @@ const SYNC_INTERVAL = 10000; // ms
             ctx.save();
             ctx.translate(p.x, p.y);
             ctx.rotate((((p.x + p.y + frame) % 360) * Math.PI) / 180);
-            ctx.fillStyle = `hsl(${p.hue}, 90%, 60%)`;
+            ctx.fillStyle = `hsl(${p.hue},90%,60%)`;
             ctx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size);
             ctx.restore();
           }
@@ -1212,7 +1202,6 @@ const SYNC_INTERVAL = 10000; // ms
         }
         step();
       }
-
       function playPour() {
         elPour.classList.remove("show");
         void elPour.offsetWidth;
@@ -1223,7 +1212,7 @@ const SYNC_INTERVAL = 10000; // ms
         if (!document.body.classList.contains("mode-mark")) playPour();
       }
 
-      // =================== LIST RENDERING ===================
+      // List
       function addRow(e) {
         const tr = document.createElement("tr");
         tr.dataset.id = e.id;
@@ -1233,7 +1222,7 @@ const SYNC_INTERVAL = 10000; // ms
           e.producer,
           e.job,
           new Date(e.date + "T00:00:00").toLocaleDateString(),
-          fmt.format(e.amount),
+          fmt.format(Number(e.amount) || 0),
         ];
         for (const text of cells) {
           const td = document.createElement("td");
@@ -1255,16 +1244,14 @@ const SYNC_INTERVAL = 10000; // ms
         btnDel.addEventListener("click", async () => {
           if (!confirm("Delete this submission?")) return;
           try {
-            await writer("/delete-entry", { id: e.id });
+            await deleteEntry(e.id);
           } catch (err) {
             alert("Delete failed: " + (err.message || err));
           }
         });
-
         btnEdit.addEventListener("click", () => startEdit(tr, e));
         subsBody.appendChild(tr);
       }
-
       function startEdit(tr, e) {
         tr.innerHTML = "";
         function mkInput(val, type = "text") {
@@ -1283,8 +1270,7 @@ const SYNC_INTERVAL = 10000; // ms
           iJob = mkInput(e.job),
           iDate = mkInput(e.date, "date"),
           iAmt = mkInput(e.amount, "text");
-        const inputs = [iProj, iClient, iProd, iJob, iDate, iAmt];
-        for (const i of inputs) {
+        for (const i of [iProj, iClient, iProd, iJob, iDate, iAmt]) {
           const td = document.createElement("td");
           td.appendChild(i);
           tr.appendChild(td);
@@ -1300,10 +1286,8 @@ const SYNC_INTERVAL = 10000; // ms
         tdAct.appendChild(btnSave);
         tdAct.appendChild(btnCancel);
         tr.appendChild(tdAct);
-
         btnCancel.addEventListener("click", renderList);
         btnSave.addEventListener("click", async () => {
-          const newAmt = parseAmountInput(iAmt.value);
           const updated = {
             id: e.id,
             project: iProj.value.trim(),
@@ -1311,16 +1295,15 @@ const SYNC_INTERVAL = 10000; // ms
             producer: iProd.value.trim(),
             job: iJob.value.trim(),
             date: iDate.value,
-            amount: newAmt,
+            amount: parseAmountInput(iAmt.value),
           };
           try {
-            await writer("/update-entry", updated);
+            await updateEntry(updated);
           } catch (err) {
             alert("Update failed: " + (err.message || err));
           }
         });
       }
-
       function renderList() {
         subsBody.innerHTML = "";
         if (!entries || entries.length === 0) {
@@ -1331,7 +1314,7 @@ const SYNC_INTERVAL = 10000; // ms
         for (const e of entries) addRow(e);
       }
 
-      // =================== LEADERBOARDS ===================
+      // Leaderboards + Projection
       function groupByProducer() {
         const map = new Map();
         for (const e of entries) {
@@ -1343,7 +1326,6 @@ const SYNC_INTERVAL = 10000; // ms
         }
         return Array.from(map.values());
       }
-
       function podiumHTML(items, type) {
         const leaderVal = items[0]
           ? type === "spend"
@@ -1369,17 +1351,15 @@ const SYNC_INTERVAL = 10000; // ms
                 ? `${fmt.format(behind)} behind`
                 : `${behind} behind`;
             const h = barHeight(val);
-            return `<div class="place" style="height:${h}px">
-                    <div class="medal">${medals[idx]}</div>
-                    <div class="name">${it.producer || "Unknown"}</div>
-                    <div class="metric">${metricText}</div>
-                    <div class="metric" style="font-size:11px">${behindText}</div>
-                  </div>`;
+            return `<div class="place" style="height:${h}px"><div class="medal">${
+              medals[idx]
+            }</div><div class="name">${
+              it.producer || "Unknown"
+            }</div><div class="metric">${metricText}</div><div class="metric" style="font-size:11px">${behindText}</div></div>`;
           })
           .join("");
         return boxes || `<div class="muted">No data yet</div>`;
       }
-
       function renderLeaderboards() {
         const rows = groupByProducer();
         const bySpend = [...rows].sort((a, b) => b.spend - a.spend).slice(0, 3);
@@ -1387,14 +1367,13 @@ const SYNC_INTERVAL = 10000; // ms
         podiumSpend.innerHTML = podiumHTML(bySpend, "spend");
         podiumCount.innerHTML = podiumHTML(byCount, "count");
         legendSpend.textContent = bySpend.length
-          ? `Ranking uses total awarded to Hogarth per producer.`
+          ? "Ranking uses total awarded to Hogarth per producer."
           : "";
         legendCount.textContent = byCount.length
-          ? `Ranking uses number of projects awarded to Hogarth per producer.`
+          ? "Ranking uses number of projects awarded to Hogarth per producer."
           : "";
         renderProjection();
       }
-
       function renderProjection() {
         const totalFromEntries = entries.reduce(
           (s, e) => s + (Number(e.amount) || 0),
@@ -1419,10 +1398,8 @@ const SYNC_INTERVAL = 10000; // ms
           )}</span></div>
           <div><strong>Needed per month:</strong> <span class="mono">${fmt.format(
             perMonth
-          )}</span></div>
-        `;
+          )}</span></div>`;
       }
-
       function renderAll() {
         renderGoalLine();
         renderStats();
@@ -1437,11 +1414,9 @@ const SYNC_INTERVAL = 10000; // ms
         viewMain.classList.toggle("hidden", isList || isLeaders);
         viewList.classList.toggle("hidden", !isList);
         viewLeaders.classList.toggle("hidden", !isLeaders);
-
         toggleLink.textContent = "Show/Edit Submissions";
         toggleLink.setAttribute("aria-label", "Show/Edit Submissions");
         toggleLink.setAttribute("href", "#list");
-
         if (isList) renderList();
         if (isLeaders) renderLeaderboards();
       }
@@ -1470,11 +1445,8 @@ const SYNC_INTERVAL = 10000; // ms
         }
         XLSX.utils.book_append_sheet(wb, ws, "Submissions");
 
-        const totalFromEntries = entries.reduce(
-          (s, e) => s + (Number(e.amount) || 0),
-          0
-        );
-        const currentTotal = BASELINE + totalFromEntries;
+        const total = entries.reduce((s, e) => s + (Number(e.amount) || 0), 0);
+        const currentTotal = BASELINE + total;
         const remaining = Math.max(0, GOAL - currentTotal);
         const now = new Date();
         const msLeft = Math.max(0, TARGET.getTime() - now.getTime());
@@ -1483,7 +1455,7 @@ const SYNC_INTERVAL = 10000; // ms
         const monthsLeft = Math.max(1, Math.ceil(daysLeft / 30.4375));
         const perWeek = remaining / weeksLeft;
         const perMonth = remaining / monthsLeft;
-        const summary = [
+        const ws2 = XLSX.utils.aoa_to_sheet([
           ["Goal", GOAL],
           ["Baseline", BASELINE],
           ["Current Total", currentTotal],
@@ -1491,16 +1463,14 @@ const SYNC_INTERVAL = 10000; // ms
           ["Days Left", daysLeft],
           ["Needed Per Week", perWeek],
           ["Needed Per Month", perMonth],
-        ];
-        const ws2 = XLSX.utils.aoa_to_sheet(summary);
-        [["B1"], ["B2"], ["B3"], ["B4"], ["B6"], ["B7"]].forEach(([addr]) => {
+        ]);
+        ["B1", "B2", "B3", "B4", "B6", "B7"].forEach((addr) => {
           if (ws2[addr]) {
             ws2[addr].t = "n";
             ws2[addr].z = "$#,##0";
           }
         });
         XLSX.utils.book_append_sheet(wb, ws2, "Summary");
-
         const fn = `ogilvy_hogarth_submissions_${new Date()
           .toISOString()
           .slice(0, 10)}.xlsx`;
@@ -1509,8 +1479,8 @@ const SYNC_INTERVAL = 10000; // ms
       dlXLSX?.addEventListener("click", exportToExcel);
       dlXLSXHeader?.addEventListener("click", exportToExcel);
 
-      // =================== FORM SUBMIT (writes via Worker) ===================
-      elForm.addEventListener("submit", async function (ev) {
+      // =================== FORM SUBMIT ===================
+      elForm.addEventListener("submit", async (ev) => {
         ev.preventDefault();
         const amount = parseAmountInput(fAmount.value);
         if (
@@ -1522,19 +1492,16 @@ const SYNC_INTERVAL = 10000; // ms
           !(amount > 0)
         )
           return;
-
         const payload = {
           project: fProject.value.trim(),
           client: fClient.value.trim(),
           producer: fProducer.value.trim(),
           job: fJob.value.trim(),
-          date: fDate.value, // yyyy-mm-dd
+          date: fDate.value,
           amount: amount,
         };
-
         try {
-         await writerAdd(payload);
-
+          await addEntry(payload);
           pourAndCelebrate();
           elForm.reset();
           fProject.focus();
@@ -1544,10 +1511,10 @@ const SYNC_INTERVAL = 10000; // ms
       });
 
       // =================== CLEAR ALL ===================
-      clearBtn?.addEventListener("click", async function () {
+      clearBtn?.addEventListener("click", async () => {
         if (!confirm("Clear ALL submissions? This cannot be undone.")) return;
         try {
-          await writer("/clear-all", {}); // implement this route in your Worker
+          await clearAll();
         } catch (err) {
           alert("Clear failed: " + (err.message || err));
         }
@@ -1589,35 +1556,46 @@ const SYNC_INTERVAL = 10000; // ms
           ? "Ogilvy X Hogarth Mark Tracker"
           : "Ogilvy X Hogarth Jar Tracker";
         modeToggle.textContent = isMark ? "Jar Mode" : "Mark Mode";
-
-        // Enable or disable the Mark cursor
-        if (isMark) {
-          MarkCursor.enable();
-        } else {
-          MarkCursor.disable();
-        }
+        if (isMark) MarkCursor.enable();
+        else MarkCursor.disable();
       }
       modeToggle.addEventListener("click", () => {
-        const toMark = !document.body.classList.contains("mode-mark");
-        setMode(toMark);
+        setMode(!document.body.classList.contains("mode-mark"));
       });
-
-      // Confetti on every click in Mark Mode
       document.addEventListener("click", (e) => {
         if (!document.body.classList.contains("mode-mark")) return;
         if (e.button !== 0) return;
+        const canvasRect = confettiCanvas.getBoundingClientRect();
+        if (
+          e.clientX < canvasRect.left ||
+          e.clientX > canvasRect.right ||
+          e.clientY < canvasRect.top ||
+          e.clientY > canvasRect.bottom
+        )
+          return;
         confettiBurstAt(e.clientX, e.clientY, 200);
       });
 
       // =================== INIT ===================
+      function renderGoalLine() {
+        goalLine.textContent =
+          BASELINE > 0
+            ? `Baseline ${fmt.format(BASELINE)} toward ${fmt.format(GOAL)} goal`
+            : `Goal ${fmt.format(GOAL)}`;
+      }
+      function updateRouteAndRender() {
+        updateRoute();
+        renderAll();
+      }
+
       async function init() {
         tickCountdown();
         updateRoute();
         if (sessionStorage.getItem("fj_unlocked") !== "1") showGate();
         else hideGate();
-        await fetchAwards(); // load shared data
+        await fetchAwards();
         renderAll();
-        setInterval(fetchAwards, SYNC_INTERVAL); // live-ish sync
+        setInterval(fetchAwards, SYNC_INTERVAL);
       }
       init();
     </script>
