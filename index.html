@@ -830,11 +830,27 @@
         visibility: visible !important;
         opacity: 1 !important;
       }
-      
+
       #viewLeaders:not(.hidden) {
         display: block !important;
         visibility: visible !important;
         opacity: 1 !important;
+      }
+
+      /* When the Submissions list or Leaderboards view is open, the
+         <main> wrapper must scroll vertically so all rows are reachable.
+         Default <main> uses fixed height + overflow:hidden + centered flex,
+         which clips long content. */
+      body:has(#viewList:not(.hidden)) main,
+      body:has(#viewLeaders:not(.hidden)) main {
+        overflow-y: auto;
+        align-items: flex-start;
+        justify-content: flex-start;
+      }
+      body:has(#viewList:not(.hidden)) #viewList,
+      body:has(#viewLeaders:not(.hidden)) #viewLeaders {
+        height: auto;
+        max-height: none;
       }
       
       /* Ensure main view is visible on home */
