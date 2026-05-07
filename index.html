@@ -808,10 +808,22 @@
       }
 
       /* List table */
-      .table { width: 100%; border-collapse: collapse; }
-      .table th, .table td { border-bottom: 1px solid var(--line); padding: 10px 8px; text-align: left; }
+      .table { width: 100%; border-collapse: separate; border-spacing: 0; }
+      .table th, .table td { border-bottom: 1px solid var(--line); padding: 10px 8px; text-align: left; vertical-align: middle; }
       .table th { font-size: 12px; color: var(--muted); font-weight: 600; }
       .table td { font-size: 14px; }
+      /* Actions column: keep Edit/Delete buttons together and visible
+         even when the table needs horizontal scrolling. */
+      .table th:last-child, .table td:last-child {
+        white-space: nowrap;
+        text-align: right;
+        position: sticky;
+        right: 0;
+        background: linear-gradient(135deg, rgba(26, 31, 58, 0.98) 0%, rgba(30, 35, 65, 0.98) 100%);
+        box-shadow: -8px 0 12px -8px rgba(0, 0, 0, 0.45);
+        z-index: 1;
+      }
+      .table td:last-child .btn.small { display: inline-flex; align-items: center; }
       .toolbar { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 12px; }
 
       .hidden { display: none !important; }
